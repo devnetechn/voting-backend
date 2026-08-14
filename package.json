@@ -8,7 +8,8 @@
     "sequelize": "sequelize-cli",
     "db:create": "sequelize-cli db:create",
     "db:migrate": "sequelize-cli db:migrate",
-    "db:seed": "sequelize-cli db:seed:all"
+    "db:seed": "sequelize-cli db:seed:all",
+    "seed:test-student": "node scripts/seed-test-student.js"
   },
   "keywords": [],
   "author": "",

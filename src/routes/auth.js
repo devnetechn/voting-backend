@@ -24,8 +24,8 @@ function issueToken(res, payload) {
   const isProd = process.env.NODE_ENV === "production";
  res.cookie("token", token, {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "none",
+  secure: isProd,
+  sameSite: isProd ? "none" : "lax",
   path: "/",
 });
   return token;
@@ -221,10 +221,11 @@ router.get("/me", requireAuth, (req, res) => {
 
 /* ---------- /logout ---------- */
 router.post("/logout", (_req, res) => {
+  const isProd = process.env.NODE_ENV === "production";
   res.cookie("token", "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production", // true in Render
-    sameSite: "none",  // 👈 must match login cookie
+    secure: isProd, // true in Render
+    sameSite: isProd ? "none" : "lax",  // 👈 must match login cookie
     maxAge: 0,
     path: "/",
   });

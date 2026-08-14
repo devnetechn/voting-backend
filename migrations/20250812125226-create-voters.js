@@ -3,62 +3,64 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, DataTypes) {
-    await queryInterface.createTable("votes", {
+    await queryInterface.createTable("voters", {
       id: {
-        type: DataTypes.INTEGER,
-        autoIncrement: true,
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
         primaryKey: true,
         allowNull: false,
       },
-
-      // ✅ snake_case columns
-      voter_id: {
-        type: DataTypes.UUID,
-        allowNull: false,
-        references: { model: "voters", key: "id" },
-        onUpdate: "CASCADE",
-        onDelete: "CASCADE",
-      },
-      candidate_id: {
-        type: DataTypes.UUID,
-        allowNull: false,
-        references: { model: "candidates", key: "id" },
-        onUpdate: "CASCADE",
-        onDelete: "CASCADE",
-      },
-
-      position: {
-        type: DataTypes.ENUM(
-          "President",
-          "Vice President",
-          "Secretary",
-          "Treasurer",
-          "Auditor",
-          "Representative"
-        ),
+      school_id: {
+        type: DataTypes.STRING(50),
         allowNull: false,
       },
-      level: {
+      full_name: {
+        type: DataTypes.STRING(150),
+        allowNull: false,
+      },
+      course: {
+        type: DataTypes.STRING(120),
+        allowNull: true,
+      },
+      year: {
+        type: DataTypes.TEXT,
+        allowNull: false,
+      },
+      status: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+      },
+      department: {
         type: DataTypes.ENUM("Elementary", "JHS", "SHS", "College"),
         allowNull: false,
       },
-
-      created_at: { allowNull: false, type: DataTypes.DATE, defaultValue: DataTypes.NOW },
-      updated_at: { allowNull: false, type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+      password_hash: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+      },
+      created_at: {
+        allowNull: false,
+        type: DataTypes.DATE,
+        defaultValue: DataTypes.NOW,
+      },
+      updated_at: {
+        allowNull: false,
+        type: DataTypes.DATE,
+        defaultValue: DataTypes.NOW,
+      },
     });
 
-    // ✅ index must match the same column names
     await queryInterface.addIndex(
-      "votes",
-      ["voter_id", "position", "level"],
-      { unique: true, name: "votes_voter_position_level_uq" }
+      "voters",
+      ["school_id", "department"],
+      { unique: true, name: "voters_school_id_department_uq" }
     );
   },
 
   async down(queryInterface) {
-    await queryInterface.removeIndex("votes", "votes_voter_position_level_uq");
-    await queryInterface.dropTable("votes");
-    await queryInterface.sequelize.query('DROP TYPE IF EXISTS "enum_votes_position";');
-    await queryInterface.sequelize.query('DROP TYPE IF EXISTS "enum_votes_level";');
+    await queryInterface.removeIndex("voters", "voters_school_id_department_uq");
+    await queryInterface.dropTable("voters");
+    await queryInterface.sequelize.query('DROP TYPE IF EXISTS "enum_voters_department";');
   },
 };
