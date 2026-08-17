@@ -271,6 +271,59 @@ router.get("/stats", requireAuth, requireRole("admin"), async (req, res) => {
   }
 });
 
+// GET /api/votes/scores — delayed (15 min rolling) candidate scores for the
+// logged-in voter's own department. Any authenticated student/admin can call.
+router.get("/scores", requireAuth, async (req, res) => {
+  try {
+    const level =
+      String((req.user?.role || "")).toLowerCase() === "student"
+        ? normLevel(req.user?.department)
+        : normLevel(req.query?.level);
+
+    if (!level) return res.status(400).json({ error: "Department/level not set" });
+
+    // Votes cast within the last 15 minutes are intentionally excluded so the
+    // score always lags "now" by ~15 minutes.
+    const sql = `
+      SELECT
+        c.id           AS "candidateId",
+        c.first_name   AS "firstName",
+        c.middle_name  AS "middleName",
+        c.last_name    AS "lastName",
+        c.party_list   AS "partyList",
+        c.position     AS "position",
+        c.level        AS "level",
+        c.photo_path   AS "photoPath",
+        COUNT(v.id)    AS "votes"
+      FROM candidates c
+      LEFT JOIN votes v
+        ON v.candidate_id = c.id
+        AND v.created_at <= NOW() - INTERVAL '15 minutes'
+      WHERE c.level = :level
+      GROUP BY c.id, c.first_name, c.middle_name, c.last_name, c.party_list, c.position, c.level, c.photo_path
+      ORDER BY c.position, "votes" DESC, c.last_name;
+    `;
+
+    const rows = await sequelize.query(sql, {
+      replacements: { level },
+      type: sequelize.QueryTypes.SELECT,
+    });
+
+    const host = `${req.protocol}://${req.get("host")}`;
+    const withPhotos = rows.map((r) => ({
+      ...r,
+      photoUrl: r.photoPath
+        ? (String(r.photoPath).startsWith("/uploads") ? host + r.photoPath : r.photoPath)
+        : null,
+    }));
+
+    res.json(withPhotos);
+  } catch (e) {
+    console.error("[VOTES GET /scores]", e?.parent?.message || e?.message || e);
+    res.status(500).json({ error: "Failed to fetch candidate scores" });
+  }
+});
+
 // POST /api/votes/reset  (admin only)
 router.post("/reset", requireAdmin, async (req, res) => {
   const t = await sequelize.transaction();

@@ -128,6 +128,36 @@ router.get("/", requireStudentOrAdmin, async (req, res) => {
   }
 });
 
+/* READ (public, no auth) — safe fields only, no vote counts */
+router.get("/public", async (req, res) => {
+  try {
+    const qLevel = normLevel(req.query.level);
+    const where = qLevel ? { level: qLevel } : {};
+
+    const rows = await Candidate.findAll({ where, order: [[createdField, "DESC"]] });
+    res.json(
+      rows.map((r) => {
+        const c = withPhotoUrl(req, r);
+        return {
+          id: c.id,
+          level: c.level,
+          position: c.position,
+          partyList: c.partyList,
+          firstName: c.firstName,
+          middleName: c.middleName,
+          lastName: c.lastName,
+          gender: c.gender,
+          year: c.year,
+          photoUrl: c.photoUrl,
+        };
+      })
+    );
+  } catch (e) {
+    console.error("[CANDIDATE GET /public]", e);
+    res.status(500).json({ error: "Failed to fetch candidates" });
+  }
+});
+
 /* READ ONE (student/admin) */
 router.get("/:id", requireStudentOrAdmin, async (req, res) => {
   try {

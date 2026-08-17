@@ -62,6 +62,10 @@ app.use("/api/votes", votesRouter);
 app.use(
   "/api/candidates",
   (req, res, next) => {
+    // Public, unauthenticated candidate listing for the pre-login "See Candidate Details" page
+    if ((req.method === "GET" || req.method === "HEAD") && req.path === "/public") {
+      return next();
+    }
     requireAuth(req, res, () => {
       if (req.method === "GET" || req.method === "HEAD") return next();
       return requireRole("admin")(req, res, next);
