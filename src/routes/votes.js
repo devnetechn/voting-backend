@@ -6,9 +6,10 @@ const { DataTypes } = require("sequelize");
 
 const router = express.Router();
 const { requireAuth, requireRole } = require(path.join(process.cwd(), "src", "middleware", "auth"));
+const { resolvePhotoUrl } = require("../lib/supabaseStorage");
 /* ---------- DB ---------- */
 const db = require(path.join(process.cwd(), "models"));
-const { sequelize, Candidate, Vote: VoteModel, Voter } = db; 
+const { sequelize, Candidate, Vote: VoteModel, Voter } = db;
 
 //set of time
 const Setting =
@@ -256,12 +257,9 @@ router.get("/stats", requireAuth, requireRole("admin"), async (req, res) => {
       type: sequelize.QueryTypes.SELECT,
     });
 
-    const host = `${req.protocol}://${req.get("host")}`;
     const withPhotos = rows.map((r) => ({
       ...r,
-      photoUrl: r.photoPath
-        ? (String(r.photoPath).startsWith("/uploads") ? host + r.photoPath : r.photoPath)
-        : null,
+      photoUrl: resolvePhotoUrl(r.photoPath, req),
     }));
 
     res.json(withPhotos);
@@ -309,12 +307,9 @@ router.get("/scores", requireAuth, async (req, res) => {
       type: sequelize.QueryTypes.SELECT,
     });
 
-    const host = `${req.protocol}://${req.get("host")}`;
     const withPhotos = rows.map((r) => ({
       ...r,
-      photoUrl: r.photoPath
-        ? (String(r.photoPath).startsWith("/uploads") ? host + r.photoPath : r.photoPath)
-        : null,
+      photoUrl: resolvePhotoUrl(r.photoPath, req),
     }));
 
     res.json(withPhotos);

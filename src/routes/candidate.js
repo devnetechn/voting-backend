@@ -1,7 +1,6 @@
 // src/routes/candidate.js
 const express = require("express");
 const path = require("path");
-const fs = require("fs");
 const multer = require("multer");
 const jwt = require("jsonwebtoken");
 
@@ -10,6 +9,7 @@ const router = express.Router();
 const ROOT_DIR = path.join(__dirname, "..", "..");
 const db = require(path.join(ROOT_DIR, "models"));
 const { Candidate } = db;
+const { uploadCandidatePhoto, deleteCandidatePhoto, resolvePhotoUrl } = require("../lib/supabaseStorage");
 
 /* ---------- helpers ---------- */
 function normLevel(s) {
@@ -38,16 +38,8 @@ function toYearString(v) {
 }
 function withPhotoUrl(req, row) {
   const obj = row?.toJSON ? row.toJSON() : row;
-  if (obj?.photoPath) obj.photoUrl = `${req.protocol}://${req.get("host")}${obj.photoPath}`;
+  if (obj?.photoPath) obj.photoUrl = resolvePhotoUrl(obj.photoPath, req);
   return obj;
-}
-function safeUnlink(relPath) {
-  try {
-    if (!relPath) return;
-    const cleaned = String(relPath).replace(/^[\\/]/, "");
-    const abs = path.join(ROOT_DIR, cleaned);
-    fs.unlinkSync(abs);
-  } catch {}
 }
 function requireAdmin(req, res, next) {
   try {
@@ -72,20 +64,14 @@ function requireStudentOrAdmin(req, res, next) {
 }
 
 /* ---------- uploads ---------- */
-const UPLOAD_DIR = path.join(ROOT_DIR, "uploads", "candidates");
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (_req, file, cb) => {
-    const safe = String(file.originalname || "photo").replace(/[^\w.-]/g, "_");
-    cb(null, `${Date.now()}-${safe.slice(-100)}`);
-  },
-});
+// Photos are buffered in memory, then pushed to Supabase Storage (see
+// ../lib/supabaseStorage) instead of the local disk — Render's filesystem is
+// ephemeral and wipes local files on every restart/redeploy.
 const fileFilter = (_req, file, cb) => {
   if (file?.mimetype?.startsWith("image/")) return cb(null, true);
   cb(new Error("Only image uploads are allowed"));
 };
-const upload = multer({ storage, fileFilter });
+const upload = multer({ storage: multer.memoryStorage(), fileFilter });
 function runUpload(req, res, next) {
   upload.single("photo")(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
@@ -186,7 +172,7 @@ router.post("/", requireAdmin, runUpload, async (req, res) => {
       });
     }
 
-    const photoPath = req.file ? `/uploads/candidates/${req.file.filename}` : null;
+    const photoPath = req.file ? await uploadCandidatePhoto(req.file) : null;
 
     const created = await Candidate.create({
       level: lvl,
@@ -216,8 +202,9 @@ router.put("/:id", requireAdmin, runUpload, async (req, res) => {
     const { level, position, partyList, firstName, middleName, lastName, gender, year } = req.body;
 
     if (req.file) {
-      safeUnlink(row.photoPath);
-      row.photoPath = `/uploads/candidates/${req.file.filename}`;
+      const newPhotoPath = await uploadCandidatePhoto(req.file);
+      await deleteCandidatePhoto(row.photoPath);
+      row.photoPath = newPhotoPath;
     }
 
     if (level !== undefined) row.level = normLevel(level) || null;
@@ -252,7 +239,7 @@ router.delete("/:id", requireAdmin, async (req, res) => {
     const row = await Candidate.findByPk(req.params.id);
     if (!row) return res.status(404).json({ error: "Not found" });
 
-    safeUnlink(row.photoPath);
+    await deleteCandidatePhoto(row.photoPath);
     await row.destroy();
     res.json({ ok: true });
   } catch (e) {
